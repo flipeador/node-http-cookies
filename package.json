@@ -1,0 +1,29 @@
+{
+  "name": "@flipeador/node-http-cookies",
+  "description": "Provides an easier way to handle HTTP cookies.",
+  "version": "1.0.0",
+  "keywords": [
+    "javascript",
+    "nodejs",
+    "middleware",
+    "cookie-parser",
+    "http-cookie",
+    "expressjs"
+  ],
+  "license": "gpl-3.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/flipeador/node-http-cookies.git"
+  },
+  "author": "Flipeador (https://github.com/flipeador)",
+  "bugs": {
+    "url": "https://github.com/flipeador/node-http-cookies/issues"
+  },
+  "homepage": "https://github.com/flipeador/node-http-cookies#readme",
+  "type": "module",
+  "sourceType": "module"
+}
