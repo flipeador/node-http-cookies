@@ -86,7 +86,7 @@ Further reading:
 ## Installation
 
 ```
-npm install flipeador/node-http-cookies
+npm i flipeador/node-http-cookies#semver:^1.0.0
 ```
 
 ## Example
