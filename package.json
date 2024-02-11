@@ -1,17 +1,17 @@
 {
   "name": "@flipeador/node-http-cookies",
   "description": "Simplifies the handling of HTTP cookies.",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": "Flipeador (https://github.com/flipeador)",
   "repository": "github:flipeador/node-http-cookies",
   "license": "Apache-2.0",
   "main": "./src/index.js",
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test test/*.js",
     "lint": "eslint ."
   },
   "type": "module",
   "devDependencies": {
-    "eslint": "^8.47.0"
+    "eslint": "^8.56.0"
   }
 }

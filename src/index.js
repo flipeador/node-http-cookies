@@ -4,43 +4,71 @@
 */
 
 import crypto from 'node:crypto';
+import { Buffer } from 'node:buffer';
+
+/**
+ * Add a property to an object with a custom getter that runs only once.
+ * On first access, the property is redefined with the return value of the getter.
+ */
+function defineProperty(obj, name, getter) {
+    Object.defineProperty(obj, name, {
+        get() {
+            delete this[name];
+            return this[name] = getter.call(this);
+        },
+        configurable: true
+    });
+}
+
+/**
+ * Add a header, preserving other headers with the same name.
+ */
+function addHeader(res, name, value) {
+    let array = res.getHeader(name);
+    if (array instanceof Array) array.push(value);
+    else res.setHeader(name, array = [array??value]);
+    return array;
+}
 
 function tryDecodeURIComponent(value) {
-    if (value === undefined || value === null) return '';
+    if (value === undefined || value === null)
+        return '';
     value = `${value}`.trim();
     try { return decodeURIComponent(value); }
     catch { return value; }
 }
 
-function hashCookie(data, secret) {
+function hash(data, secret, encoding) {
     return crypto
     .createHmac('sha256', secret)
     .update(data)
-    .digest('base64')
-    .replace(/[=]+$/u, '');
+    .digest(encoding);
 }
 
 /**
- * Sign a cookie value.
+ * Sign a cookie value given a secret key.
  */
 export function signCookie(value, secret) {
-    return `${value}.${hashCookie(value, secret)}`;
+    const signature = hash(value, secret, 'base64');
+    return `${value}.${signature}`;
 }
 
 /**
- * Parse a cookie value as a signed cookie.
+ * Verify the integrity of a signed cookie value.
  */
 export function signedCookie(data, secret) {
     const index = data.lastIndexOf('.');
     const value = data.slice(0, index);
     const signature = data.slice(index + 1);
-
-    if (signature === hashCookie(value, secret))
-        return value;
+    const result = crypto.timingSafeEqual(
+        Buffer.from(signature, 'base64'),
+        hash(value, secret)
+    );
+    if (result) return value;
 }
 
 /**
- * Try to parse a cookie value as a signed cookie.
+ * Try to parse a signed cookie value.
  */
 export function parseSignedCookie(value, secret) {
     if (typeof(value) === 'string' && value.startsWith('s:'))
@@ -49,7 +77,7 @@ export function parseSignedCookie(value, secret) {
 }
 
 /**
- * Try to parse a cookie value as JSON.
+ * Try to parse a JSON cookie value.
  */
 export function parseJsonCookie(value) {
     if (typeof(value) === 'string' && value.startsWith('j:'))
@@ -58,12 +86,12 @@ export function parseJsonCookie(value) {
 }
 
 /**
- * Parse a Cookie header.
+ * Parse the Cookie header.
  * @reference https://developer.mozilla.org/docs/Web/HTTP/Headers/Cookie
  */
 export function parseCookieHeader(cookieHeader) {
     if (!cookieHeader || typeof(cookieHeader) !== 'string')
-        return {};
+        return { };
 
     return cookieHeader.split(';').map(
         cookie => cookie.split('=')
@@ -71,7 +99,7 @@ export function parseCookieHeader(cookieHeader) {
         cookies[tryDecodeURIComponent(cookie[0])]
             = tryDecodeURIComponent(cookie[1]);
         return cookies;
-    }, {});
+    }, { });
 }
 
 /**
@@ -79,26 +107,37 @@ export function parseCookieHeader(cookieHeader) {
  * @reference https://developer.mozilla.org/docs/Web/HTTP/Headers/Set-Cookie
  */
 export function createCookie(name, value, options) {
-    if (!name || !value) throw new Error('Invalid cookie');
-    if (typeof(value) !== 'string') value = `j:${JSON.stringify(value)}`;
-    if (options?.secret) value = `s:${signCookie(value, options.secret)}`;
+    if (!name || !value)
+        throw new TypeError('Invalid cookie');
+    if (typeof(value) !== 'string')
+        value = `j:${JSON.stringify(value)}`;
+    if (options?.secret)
+        value = `s:${signCookie(value, options.secret)}`;
     let cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
-    for (const [key, value] of Object.entries(options ?? {}))
-        if (!['secret'].includes(key))
-            cookie += `;${key}` + (value === true ? '' : `=${value}`);
+    [
+        ['Domain', options?.domain],
+        ['Path', options?.path ?? '/'],
+        ['Secure', !!options?.secure],
+        ['HttpOnly', !!options?.httpOnly],
+        ['SameSite', options?.sameSite ?? 'lax'],
+        ['Partitioned', !!options?.partitioned],
+        ['Expires', options?.expires],
+        ['Max-Age', options?.maxAge]
+    ].forEach(([key, value]) => {
+        if (![null, undefined, false, NaN, ''].includes(value))
+            cookie += `;${key}${value === true ? '' : `=${value}`}`;
+    });
     return cookie;
 }
 
 /**
- * Add a cookie given a response.
+ * Set a cookie given a response.
  */
-export function addCookie(res, name, value, options) {
-    const cookie = createCookie(name, value, options);
-    let cookies = res.getHeader('Set-Cookie') ?? [];
-    if (!(cookies instanceof Array)) cookies = [cookies];
-    cookies.push(cookie);
-    res.setHeader('Set-Cookie', cookies);
-    return cookies;
+export function setCookie(res, name, value, options) {
+    return addHeader(res, 'Set-Cookie', (
+        value === undefined && options === undefined
+        ? name : createCookie(name, value, options)
+    ));
 }
 
 /**
@@ -106,12 +145,12 @@ export function addCookie(res, name, value, options) {
  */
 export function cookieParser() {
     return (req, res, next) => {
-        if (req.cookies !== undefined)
-            throw new Error('Cookies already set');
-
-        req.cookies = parseCookieHeader(req.headers.cookie);
-        res.addCookie = addCookie.bind(undefined, res);
-
+        if (req.cookies)
+            throw Error('req.cookies already set');
+        defineProperty(req, 'cookies', function() {
+            return parseCookieHeader(this.headers.cookie);
+        });
+        res.cookie = setCookie.bind(undefined, res);
         next();
     };
 }
